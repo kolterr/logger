@@ -15,15 +15,14 @@ var (
 )
 
 const (
-	timeFormatDefault = "2006-01-02 15:04:05"
-	timeFormatShort   = "2006-01-02"
+	timeFormatDefault = "2006-1-02 15:04:05"
+	timeFormatShort   = "2006-1-02"
 	call3Depth        = 2
 )
 
 type Logger interface {
 	SetLevel(level int)
 	outPut(call3Depth, level int, format string, arg ...interface{})
-	run()
 	SetFlags(int)
 	Debug(format string, v ...interface{})
 	Error(format string, v ...interface{})
@@ -31,7 +30,6 @@ type Logger interface {
 	Info(format string, v ...interface{})
 	Warn(format string, v ...interface{})
 	Trace(format string, v ...interface{})
-	NoColor()
 }
 
 func SetColors(c [6]string) {

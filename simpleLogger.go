@@ -43,10 +43,6 @@ func (l *SimpleLogger) outPut(call3Depth, level int, format string, arg ...inter
 	l.handler.Write([]byte(outPut))
 }
 
-func (l *SimpleLogger) run() {
-
-}
-
 func (l *SimpleLogger) SetFlags(f int) {
 	l.flag = f
 }
@@ -72,15 +68,10 @@ func (l *SimpleLogger) Trace(format string, arg ...interface{}) {
 	l.outPut(call3Depth, LevelTrace, format, arg)
 }
 
-func (l *SimpleLogger) NoColor() {
-
-}
-
 func NewSimpleLogger(handler Handler) Logger {
 	l := &SimpleLogger{
 		level:   LevelInfo,
 		handler: handler,
 	}
-	go l.run()
 	return l
 }
