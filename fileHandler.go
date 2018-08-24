@@ -1,63 +1,85 @@
 package logger
 
 import (
-	"os"
-	"path/filepath"
 	"fmt"
-	"time"
-	"sync"
-	"path"
-	"strings"
+	"os"
 	"os/exec"
-	"sync/atomic"
-	"io/ioutil"
+	"path"
+	"path/filepath"
+	"strings"
+	"sync"
+	"time"
+	"io"
 	"bytes"
 )
 
+const (
+	bufferSize = 1024 * 1024
+)
+
 type FileHandler struct {
-	file     *os.File
-	lock     sync.Mutex
-	fileName string
-	prefix   string
-	maxLine  int64
-	maxSize  int64
-	line     *int64
-	size     *int64
+	file          *os.File
+	lock          sync.Mutex
+	fileName      string
+	prefix        string
+	maxBufferSize int
+	transportChan chan []byte
+	bufferPool    []byte
+	close         bool
+	errorChan     chan error
 }
 
-func (f *FileHandler) Write(data []byte) (int, error) {
-	f.lock.Lock()
-	defer f.lock.Unlock()
-	if f.maxLine != 0 && f.maxLine <= *f.line {
-		return 0, nil
+func (f *FileHandler) SetBufferSize(size int) {
+	f.maxBufferSize = size
+}
+
+func (f *FileHandler) run() {
+	for {
+		select {
+		case data := <-f.transportChan:
+			b:=bytes.NewBuffer(f.bufferPool)
+			b.Write(data)
+			f.bufferPool = b.Bytes()
+			if len(f.bufferPool)>=f.maxBufferSize {
+				f.doWrite()
+			}
+		case err := <-f.errorChan:
+			f.file.Close()
+			io.WriteString(os.Stdout,fmt.Sprintf("write error %+v",err))
+		}
 	}
-	if f.maxSize != 0 && int64(len(data)) + *f.size > f.maxSize {
-		return 0, nil
+}
+
+func (f *FileHandler) Write(data []byte) error {
+	if f.close {
+		return nil
 	}
 	if err := f.nextFile(); err != nil {
-		return 0, err
+		f.errorChan<-err
+		return err
 	}
-	n, err := f.file.Write(data)
-	if err == nil {
-		atomic.AddInt64(f.line, 1)
-		atomic.AddInt64(f.line, int64(len(data)))
+	f.transportChan <- data
+	return nil
+}
+
+func (f *FileHandler) doWrite() {
+	if len(f.bufferPool)==0{
+		return
 	}
-	return n, err
+	if _,err:=f.file.Write(f.bufferPool); err !=nil{
+		f.errorChan <- err
+	}
+	f.bufferPool = make([]byte,0)
 }
 
 func (f *FileHandler) Close() error {
+	f.close = true
+	f.doWrite() // 防止数据丢失
 	return f.file.Close()
 }
 
-func (f *FileHandler) SetLine(line int64) {
-	f.maxLine = line
-}
 
-func (f *FileHandler) SetMaxSize(maxSize int64) {
-	f.maxSize = maxSize
-}
-
-// nextFile 检查是否跨日
+// nextFile 检查是否跨时间
 func (f *FileHandler) nextFile() error {
 	fileName := strings.TrimSuffix(f.fileName, path.Ext(f.fileName))
 	if time.Now().Format(timeFormatShort) != fileName { // 跨日
@@ -94,36 +116,21 @@ func NewFileHandler(prefix string) (*FileHandler, error) {
 	if err != nil {
 		return nil, err
 	}
-	info, err := file.Stat()
-	if err != nil {
-		return nil, err
+	o := &FileHandler{
+		file:          file,
+		fileName:      fileName,
+		prefix:        prefix,
+		transportChan: make(chan []byte,bufferSize),
+		errorChan:     make(chan error, 1),
+		bufferPool:    make([]byte, 0),
+		maxBufferSize:1024*1024,
 	}
-	count, err := getFileLine(fileName)
-	if err != nil {
-		return nil, err
-	}
-	n, s := new(int64), new(int64)
-	*n, *s = count, info.Size()
-	return &FileHandler{
-		file:     file,
-		fileName: fileName,
-		prefix:   prefix,
-		line:     n,
-		size:     s,
-	}, nil
+	go o.run()
+	return o, nil
 }
 
 func createFile(fileName string) (*os.File, error) {
 	dir := filepath.Dir(fileName)
 	os.MkdirAll(dir, 0755)
 	return os.OpenFile(fileName, os.O_CREATE|os.O_APPEND|os.O_RDWR, 0644)
-}
-
-func getFileLine(fileName string) (int64, error) {
-	b, err := ioutil.ReadFile(fileName)
-	if err != nil {
-		return 0, err
-	}
-	n := bytes.Count(b, []byte("\n"))
-	return int64(n), nil
 }

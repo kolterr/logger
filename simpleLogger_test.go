@@ -2,7 +2,8 @@ package logger_test
 
 import (
 	"testing"
-	"git.ycyz.org/kolter/logger"
+	"kolter/logger"
+	"time"
 )
 
 func TestSimpleLogger(t *testing.T) {
@@ -14,10 +15,17 @@ func TestSimpleLogger(t *testing.T) {
 	//l.Error("Error")
 	//l.Fatal("fatal")
 	//l.Info("info")
-
+	ch :=make(chan bool,1)
 	f, _ := logger.NewFileHandler("")
 	ll := logger.NewSimpleLogger(f)
-	ll.SetLevel(logger.LevelDebug)
-	ll.Debug("debug")
-	ll.Warn("warn")
+	for i:=0;i < 6;i++{
+		ll.Debug("debug")
+		ll.Warn("warn")
+	}
+	go func() {
+		f.Close()
+		time.Sleep(time.Second)
+		ch<-true
+	}()
+	<-ch
 }

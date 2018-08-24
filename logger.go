@@ -17,7 +17,7 @@ var (
 const (
 	timeFormatDefault = "2006-1-02 15:04:05"
 	timeFormatShort   = "2006-1-02"
-	call3Depth        = 2
+	call3Depth        = 3
 )
 
 type Logger interface {
