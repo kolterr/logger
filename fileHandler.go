@@ -44,6 +44,7 @@ func (f *FileHandler) run() {
 				f.doWrite()
 			}
 		case err := <-f.errorChan:
+			f.close = true
 			f.file.Close()
 			io.WriteString(os.Stdout,fmt.Sprintf("write error %+v",err))
 		}
