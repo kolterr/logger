@@ -37,26 +37,28 @@ func (f *FileHandler) run() {
 	for {
 		select {
 		case data := <-f.transportChan:
-			b:=bytes.NewBuffer(f.bufferPool)
+			b := bytes.NewBuffer(f.bufferPool)
 			b.Write(data)
 			f.bufferPool = b.Bytes()
-			if len(f.bufferPool)>=f.maxBufferSize {
+			if len(f.bufferPool) >= f.maxBufferSize {
 				f.doWrite()
 			}
 		case err := <-f.errorChan:
 			f.close = true
 			f.file.Close()
-			io.WriteString(os.Stdout,fmt.Sprintf("write error %+v",err))
+			io.WriteString(os.Stdout, fmt.Sprintf("write error %+v", err))
 		}
 	}
 }
 
 func (f *FileHandler) Write(data []byte) error {
+	f.lock.Lock()
+	defer f.lock.Unlock()
 	if f.close {
 		return nil
 	}
 	if err := f.nextFile(); err != nil {
-		f.errorChan<-err
+		f.errorChan <- err
 		return err
 	}
 	f.transportChan <- data
@@ -64,21 +66,22 @@ func (f *FileHandler) Write(data []byte) error {
 }
 
 func (f *FileHandler) doWrite() {
-	if len(f.bufferPool)==0{
+	if len(f.bufferPool) == 0 {
 		return
 	}
-	if _,err:=f.file.Write(f.bufferPool); err !=nil{
+	if _, err := f.file.Write(f.bufferPool); err != nil {
 		f.errorChan <- err
 	}
-	f.bufferPool = make([]byte,0)
+	f.bufferPool = make([]byte, 0)
 }
 
 func (f *FileHandler) Close() error {
+	f.lock.Lock()
+	defer f.lock.Unlock()
 	f.close = true
 	f.doWrite() // 防止数据丢失
 	return f.file.Close()
 }
-
 
 // nextFile 检查是否跨时间
 func (f *FileHandler) nextFile() error {
@@ -121,11 +124,12 @@ func NewFileHandler(prefix string) (*FileHandler, error) {
 		file:          file,
 		fileName:      fileName,
 		prefix:        prefix,
-		transportChan: make(chan []byte,bufferSize),
+		transportChan: make(chan []byte, bufferSize),
 		errorChan:     make(chan error, 1),
 		bufferPool:    make([]byte, 0),
-		maxBufferSize:1024*1024,
+		maxBufferSize: 1024 * 1024,
 	}
+	o.packAge()
 	go o.run()
 	return o, nil
 }

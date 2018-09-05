@@ -2,7 +2,7 @@ package logger_test
 
 import (
 	"testing"
-	"kolter/logger"
+	"git.ycyz.org/kolter/logger"
 	"time"
 )
 

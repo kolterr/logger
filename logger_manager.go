@@ -39,3 +39,7 @@ func (l *LogManager) Trace(format string, arg ...interface{}) {
 		v.Trace(format, arg)
 	}
 }
+
+func NewLoggerManager() *LogManager {
+	return &LogManager{loggers: make([]Logger, 0)}
+}
